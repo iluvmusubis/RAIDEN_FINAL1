@@ -1,0 +1,661 @@
+import pygame, os, sys, random, math, time
+
+os.environ['SDL_VIDEO_CENTERED'] = '1'
+
+WIN_W = 512
+WIN_H = 700
+SHIP_WIDTH = WIN_W/15
+SHIP_HEIGHT = WIN_H/15
+H_W = (SHIP_WIDTH + 75)
+H_H = SHIP_HEIGHT+ 20
+HP_W = HP_H = 75
+A_W = WIN_W/10
+A_H = WIN_H/10
+WHITE = (255,255,255)
+GRAY = (210, 210, 210)
+GREEN = (122, 227, 122)
+DARK_GRAY = (114, 114, 114)
+BLUE = (118, 199, 251)
+PINK = (255, 20, 255)
+RED = (255, 0 ,84)
+BLACK = (0, 0, 0)
+INTRO = (208, 242, 255)
+INTRO_TEXT = (80, 80, 80)
+
+#pygame.mixer.pre_init(44100, -16, 2, 2048)
+
+class Helicopter(pygame.sprite.Sprite):
+    def __init__(self, container):
+        pygame.sprite.Sprite.__init__(self)
+        self.speed = 2
+        self.image = pygame.image.load("images/helicopter.jpg").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (HP_W, HP_H))
+        self.rect = self.image.get_rect()
+        self.rect.centerx = container.width / 2 - 30
+        self.rect.y = container.top + 200
+        self.container = container
+        self.density = HP_W * HP_H
+
+    def move_helicopter(self):
+        if 192 < TIMER < 324:
+            self.rect = self.rect.move(-self.speed, -1)
+        if 324 < TIMER < 456:
+            self.rect = self.rect.move(self.speed, 0)
+        if 456 < TIMER < 615:
+            self.rect = self.rect.move(self.speed, 1)
+        if 615 < TIMER < 775:
+            self.rect = self.rect.move(self.speed - 4, 1)
+
+    def move_inbounds(self):
+        if self.rect.right >= self.container.width - 6:
+            self.rect.right = self.container.width - 6
+        if self.rect.left < 0:
+            self.rect.left = 0
+        if self.rect.top < 0:
+            self.rect.top = 0
+        if self.rect.bottom > self.container.height:
+            self.rect.bottom = self.container.height
+
+    def update(self, ship):
+        self.move_helicopter()
+        self.move_inbounds()
+
+        if TIMER % 60 == 0:
+            heli_bullet = Heli_bullet(self)
+            heli_bullet_group.add(heli_bullet)
+
+        collisions = pygame.sprite.spritecollide(self, bullet_group, True)
+        for b in collisions:
+            self.density -= b.density * 5
+            #num_kills += 100
+
+        if self.density >= 125:
+            self.rect.width = self.rect.height = math.sqrt(self.density)
+
+        self.image = pygame.transform.scale(self.image, (self.rect.width, self.rect.height))
+
+        if self.density <= 125:
+            kill_music = pygame.mixer.Sound("sounds/heli_kill.ogg")
+            kill_music.play(-1)
+            self.kill()
+            time.sleep(1)
+            kill_music.stop()
+
+
+
+class Heli_bullet(pygame.sprite.Sprite):
+    def __init__(self, helicopter):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("images/heli_bullet.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (25, 25))
+        self.rect = self.image.get_rect()
+        self.rect.x = helicopter.rect.centerx - 5
+        self.rect.y = helicopter.rect.bottom
+        self.speed = 5
+        self.density = 49
+
+    def update(self, container, huey, ship):
+        self.rect = self.rect.move((0, self.speed))
+        if self.rect.y > container.bottom or self.rect.bottom < container.top:
+            self.kill()
+
+
+class Huey(pygame.sprite.Sprite):
+    def __init__(self, container, camera_entity, num_kills):
+        pygame.sprite.Sprite.__init__(self)
+        self.speed = 2
+        self.image = pygame.image.load("images/huey.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (H_W, H_H))
+        self.rect = self.image.get_rect()
+        self.rect.centerx = container.width/2
+        self.rect.y = container.bottom - 500
+        self.container = container
+        self.density = H_W * H_H
+        self.score = num_kills
+
+    def move_huey(self):
+        if TIMER < 60:
+            self.rect = self.rect.move(0, 1)
+        if 60 < TIMER < 192:
+            self.rect = self.rect.move(-self.speed, -3)
+        if 192 < TIMER < 324:
+            self.rect = self.rect.move(self.speed, 0)
+        if 324 < TIMER < 456:
+            self.rect = self.rect.move(self.speed, -2)
+        if 456 < TIMER < 588:
+            self.rect = self.rect.move(-self.speed, -1.5)
+        if 588 < TIMER < 720:
+            self.rect = self.rect.move(self.speed, 0)
+        if 720 < TIMER < 918:
+            self.rect = self.rect.move(-self.speed, 1)
+        if 918 < TIMER < 1050:
+            self.rect = self.rect.move(-self.speed, -1)
+        if 1050 < TIMER < 1182:
+            self.rect = self.rect.move(self.speed, 0)
+
+    def move_inbounds(self):
+        if self.rect.right >= self.container.width:
+            self.rect.right = self.container.width
+        if self.rect.left < 0:
+            self.rect.left = 0
+        if self.rect.top < 0:
+            self.rect.top = 0
+        if self.rect.bottom > self.container.height:
+            self.rect.bottom = self.container.height
+
+    def update(self):
+        self.move_huey()
+        self.move_inbounds()
+
+        collisions = pygame.sprite.spritecollide(self, bullet_group, True)
+        for p in collisions:
+            self.density -= p.density * 10
+            self.score += 50
+
+        if self.density >= 194:
+            self.rect.width = math.sqrt(self.density) + 55
+            self.rect.height = math.sqrt(self.density)
+
+        self.image = pygame.transform.scale(self.image, (self.rect.width, self.rect.height))
+
+        if self.density <= 194:
+            self.kill()
+            huey_kill = pygame.mixer.Sound("sounds/huey_kill.ogg")
+            huey_kill.play()
+            time.sleep(1)
+
+        if TIMER % 90 == 0:
+            h_bullet = H_bullet()
+            h_bullet.set_pos(self)
+            h_bullet_group.add(h_bullet)
+
+            h1_bullet = H1_bullet()
+            h1_bullet.set_pos(self)
+            h1_bullet_group.add(h1_bullet)
+
+            h2_bullet = H2_bullet()
+            h2_bullet.set_pos(self)
+            h2_bullet_group.add(h2_bullet)
+
+
+class H_bullet(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("images/huey_bullet.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (30, 30))
+        self.rect = self.image.get_rect()
+        self.speed = 5
+        self.density = 25
+
+    def set_pos(self, huey):
+        self.rect.x = huey.rect.centerx - 2.5
+        self.rect.y = huey.rect.bottom
+
+    def update(self, container, ship):
+        self.rect = self.rect.move((0, self.speed))
+        if self.rect.y < container.top or self.rect.top > container.bottom:
+            self.kill()
+
+
+class H1_bullet(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("images/huey_bullet.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (30, 30))
+        self.rect = self.image.get_rect()
+        self.speed = 5
+        self.density = 25
+
+    def set_pos(self, huey):
+        self.rect.x = huey.rect.centerx + 50
+        self.rect.y = huey.rect.bottom
+
+    def update(self, container, ship):
+        self.rect = self.rect.move((self.speed - 2.5, self.speed))
+        if self.rect.y < container.top or self.rect.left > container.width or self.rect.top > container.bottom:
+            self.kill()
+
+
+class H2_bullet(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("images/huey_bullet.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (30, 30))
+        self.rect = self.image.get_rect()
+        self.speed = 5
+        self.density = 25
+
+    def set_pos(self, huey):
+        self.rect.x = huey.rect.centerx - 54
+        self.rect.y = huey.rect.bottom
+
+    def update(self, container, ship):
+        self.rect = self.rect.move((-self.speed + 2.5, self.speed))
+        if self.rect.y < container.top or self.rect.right < 0 or self.rect.top > container.bottom:
+            self.kill()
+
+
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load("images/bullet.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (20, 20))
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.speed = 15
+        self.density = 100
+
+    def update(self, container, huey):
+        self.rect = self.rect.move((0, -self.speed))
+        if self.rect.y < container.top:
+            self.kill()
+
+
+class Platform(pygame.sprite.Sprite):
+    def __init__(self, xpos, ypos):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.Surface((32,32), pygame.SRCALPHA)
+        self.image.convert()
+        self.image.fill((210, 210, 210, 0))
+        self.rect = pygame.Rect(xpos, ypos, 32, 32)
+
+
+class Ship(pygame.sprite.Sprite):
+    def __init__(self, container):
+        pygame.sprite.Sprite.__init__(self)
+        self.side_speed = 5
+        self.top_speed = 4
+        self.image = pygame.image.load("images/spaceship_copy.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (SHIP_WIDTH + 50, SHIP_HEIGHT+ 50))
+        self.rect = self.image.get_rect()
+        self.rect.centerx = container.centerx
+        self.rect.y = container.bottom - self.rect.height * 3
+        self.container = container
+        if self.rect.bottom >= container.bottom - self.rect.height:
+            self.rect.top = container.bottom - self.rect.height
+        self.density = SHIP_HEIGHT * SHIP_WIDTH
+
+
+    def move_ship(self):
+        key = pygame.key.get_pressed()
+
+        if key[pygame.K_UP]:
+            self.rect.y -= self.top_speed
+        elif key[pygame.K_DOWN]:
+            self.rect.y += self.top_speed
+        if key[pygame.K_LEFT]:
+            self.rect.x -= self.side_speed
+        elif key[pygame.K_RIGHT]:
+            self.rect.x += self.side_speed
+
+
+    def update(self):
+        self.move_ship()
+        self.rect.clamp_ip(self.container)
+
+        collisions = pygame.sprite.spritecollide(self, h_bullet_group, True)
+        for h in collisions:
+            self.density -= h.density * 8
+
+        collisions1 = pygame.sprite.spritecollide(self, h1_bullet_group, True)
+        for h in collisions1:
+            self.density -= h.density * 8
+
+        collisions2 = pygame.sprite.spritecollide(self, h2_bullet_group, True)
+        for h in collisions2:
+            self.density -= h.density * 8
+
+        collisions3 = pygame.sprite.spritecollide(self, heli_bullet_group, True)
+        for h in collisions3:
+            self.density -= h.density * 2
+
+        if self.density >= 164:
+            self.rect.width = math.sqrt(self.density)
+            self.rect.height = math.sqrt(self.density) + 12.53333
+
+        self.image = pygame.transform.scale(self.image, (self.rect.width, self.rect.height))
+
+        if self.density <= 380:
+            ship_kill_music = pygame.mixer.Sound("sounds/ship_kill2.ogg")
+            ship_kill_music.play()
+            self.kill()
+            time.sleep(1)
+
+
+        if TIMER % 10 == 0:
+            key = pygame.key.get_pressed()
+
+            if key[pygame.K_SPACE]:
+                shoot_music = pygame.mixer.Sound("sounds/laser.ogg")
+                shoot_music.play()
+
+                bullet = Bullet(self.rect.centerx - 16, self.rect.y - 3)
+                bullet_group.add(bullet)
+
+                bullet = Bullet(self.rect.centerx + 12, self.rect.y - 3)
+                bullet_group.add(bullet)
+
+
+class Camera:
+    def __init__(self, width, height):
+        self.x_offset = 0
+        self.y_offset = 0
+        self.ww = width
+        self.wh = height
+
+    def apply(self, obj):
+        return pygame.Rect(obj.rect.x + self.x_offset, obj.rect.y + self.y_offset, obj.rect.width, obj.rect.height)
+
+    def update(self, ship, camera_entity):
+        self.x_offset = -ship.rect.x + WIN_W/2
+        self.y_offset = -camera_entity.rect.y + WIN_H / 2
+
+        if self.x_offset > 0:
+            self.x_offset = 0
+
+        elif self.x_offset < -(self.ww - WIN_W):
+            self.x_ofset = -(self.ww - WIN_W)
+
+        if self.y_offset > 0:
+            self.y_offset = 0
+
+        elif self.y_offset < -(self.wh - WIN_H):
+            self.y_ofset = -(self.wh - WIN_H)
+
+
+class Camera_entity(pygame.sprite.Sprite):
+    def __init__(self, container):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.Surface((10,10))
+        self.image.convert()
+        self.image.fill(GRAY)
+        self.rect = self.image.get_rect()
+        self.rect.centerx = container.centerx
+        self.rect.y = container.bottom
+        self.is_moving = False
+        self.container = container
+        self.speed = 1
+
+    def update(self):
+        self.rect.y -= .5
+        self.rect.x = WIN_W/2
+
+        if self.rect.y < self.container.bottom - WIN_H/2:
+            self.is_moving = True
+        if self.rect.y < WIN_H/2:
+            self.is_moving = False
+
+class Text(pygame.sprite.Sprite):
+    def __init__(self, size, color, pos):
+        pygame.sprite.Sprite.__init__(self)
+        self.color = color
+        self.position = pos
+        self.font = pygame.font.SysFont("Orator STD", size)
+
+    def update(self, num_kills):
+        text = "score: " + str(num_kills)
+
+        self.image = self.font.render(str(text), 1, self.color)
+        self.rect = self.image.get_rect()
+        self.rect.move_ip(self.position[0] - self.rect.width/2, self.position[1])
+
+
+def main():
+    global loop_counter, bullet_group, TIMER, h_bullet_group, h1_bullet_group, h2_bullet_group, heli_bullet_group
+
+    #initialize variables
+    pygame.init()
+    pygame.mixer.init()
+    fps = 60
+    clock = pygame.time.Clock()
+    intro = True
+    play = False
+    outro = False
+    pygame.display.set_caption("Raiden")
+    screen = pygame.display.set_mode((WIN_W, WIN_H), pygame.SRCALPHA)
+    TIMER = 0
+    num_kills = 0
+
+
+    platform_group = pygame.sprite.Group()
+    ship_group = pygame.sprite.Group()
+    bullet_group = pygame.sprite.Group()
+    huey_group = pygame.sprite.Group()
+    h_bullet_group = pygame.sprite.Group()
+    h1_bullet_group = pygame.sprite.Group()
+    h2_bullet_group = pygame.sprite.Group()
+    helicopter_group = pygame.sprite.Group()
+    heli_bullet_group = pygame.sprite.Group()
+
+
+    level = [
+        "PPPPPPPPPPPPPPPPPPPP",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "P                  P",
+        "PPPPPPPPPPPPPPPPPPPP", ]
+
+
+    container = pygame.Rect(0, 0, len(level[0]) * 32, len(level) * 32)
+    ship = Ship(container)
+    camera_entity = Camera_entity(container)
+    ship_group.add(ship, camera_entity)
+    camera = Camera(container.width, container.height)
+    huey = Huey(container, camera_entity, num_kills)
+    huey_group.add(huey, camera_entity)
+    bullet = Bullet(ship.rect.left, ship.rect.y - 3)
+    bullet_group.add(bullet)
+    h_bullet = H_bullet()
+    h_bullet_group.add(h_bullet)
+    h1_bullet = H1_bullet()
+    h1_bullet_group.add(h1_bullet)
+    h2_bullet = H2_bullet()
+    h2_bullet_group.add(h2_bullet)
+    helicopter = Helicopter(container)
+    helicopter_group.add(helicopter)
+    heli_bullet = Heli_bullet(helicopter)
+    heli_bullet_group.add(heli_bullet)
+
+    #build level
+    x = y = 0
+    for row in level:
+        for col in row:
+            if col == "P":
+                p = Platform(x, y)
+                platform_group.add(p)
+            x += 32
+        y += 32
+        x = 0
+
+    music_intro = pygame.mixer.Sound("sounds/intro.ogg").play(-1)
+
+    intro_back = pygame.image.load("images/Colorful-Galaxy-Background-1.jpg").convert()
+    intro_back = pygame.transform.scale(intro_back, (WIN_W, WIN_H))
+    intro_rect = intro_back.get_rect()
+
+    score = Text(50, WHITE, (container.centerx - 45, 35))
+    score_group = pygame.sprite.Group()
+    score_group.add(score)
+
+    while True:
+
+        while intro:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT: sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN or pygame.key.get_pressed()[pygame.K_RETURN] != 0:
+                    intro = False
+                    play = True
+                    music_intro.stop()
+
+            introtitle = Text(120, WHITE, (container.centerx, WIN_H/ 4))
+            introtitle.image = introtitle.font.render("Raiden", 1, introtitle.color)
+            introtitle.rect = introtitle.image.get_rect()
+            introtitle.rect = introtitle.rect.move(WIN_W / 4 - 86, WIN_H / 3.75)
+
+            introsub = Text(50, WHITE, (WIN_W / 2 - 160, WIN_H / 3))
+            introsub.image = introsub.font.render("click to play", 1, introsub.color)
+            introsub.rect = introsub.image.get_rect()
+            introsub.rect = introsub.rect.move(WIN_W / 4.75 - 43, WIN_H / 2)
+
+            screen.blit(intro_back, intro_rect)
+            screen.blit(introtitle.image, introtitle.rect)
+
+            if pygame.time.get_ticks() % 1000 < 500:
+                screen.blit(introsub.image, introsub.rect)
+
+            clock.tick(fps)
+
+            pygame.display.flip()
+
+        while play:
+            screen.blit(intro_back, intro_rect)
+
+            #read input
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    sys.exit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        sys.exit()
+
+
+            #run update
+
+            platform_group.draw(screen)
+            ship_group.draw(screen)
+            ship_group.update()
+            camera.update(ship, camera_entity)
+            camera_entity.update()
+            huey_group.draw(screen)
+            huey_group.update()
+            bullet_group.update(container, huey)
+            bullet_group.draw(screen)
+            h_bullet_group.update(container, ship)
+            h_bullet_group.draw(screen)
+            h1_bullet_group.update(container, ship)
+            h1_bullet_group.draw(screen)
+            h2_bullet_group.update(container, ship)
+            h2_bullet_group.draw(screen)
+            helicopter_group.draw(screen)
+            helicopter_group.update(ship)
+            heli_bullet_group.draw(screen)
+            heli_bullet_group.update(container, huey, ship)
+
+            score_group.update(num_kills)
+            score_group.draw(screen)
+
+            #draw objects
+            for p in platform_group:
+                screen.blit(p.image, camera.apply(p))
+            for s in ship_group:
+                screen.blit(s.image, camera.apply(s))
+            for h in huey_group:
+                screen.blit(h.image, camera.apply(h))
+            for b in bullet_group:
+                screen.blit(b.image, camera.apply(b))
+            for hb in h_bullet_group:
+                screen.blit(hb.image, camera.apply(hb))
+            for hb1 in h1_bullet_group:
+                screen.blit(hb1.image, camera.apply(hb1))
+            for hb2 in h2_bullet_group:
+                screen.blit(hb2.image, camera.apply(hb2))
+            for hp in helicopter_group:
+                screen.blit(hp.image, camera.apply(hp))
+            for hpb in heli_bullet_group:
+                screen.blit(hpb.image, camera.apply(hpb))
+            for sc in score_group:
+                screen.blit(sc.image, camera.apply(sc))
+
+            if huey.density <= 1444 and helicopter.density <= 125:
+                play = False
+                time.sleep(1.5)
+                outro = True
+            elif ship.density <= 380:
+                play = False
+                time.sleep(1.5)
+                outro = True
+
+            if huey.density <= 1444 and helicopter.density <= 125:
+                music_outro = pygame.mixer.Sound("sounds/outro_win.ogg").play(-1)
+            elif ship.density <= 380:
+                music_outro = pygame.mixer.Sound("sounds/outro.ogg").play(-1)
+
+            TIMER += 1
+
+            #limits frames per iteration of while loop
+            clock.tick(fps)
+
+            #writes to main surface
+            pygame.display.flip()
+
+        while outro:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT: sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN or pygame.key.get_pressed()[pygame.K_RETURN]:
+                    outro = False
+                    music_outro.stop()
+                    huey.density = 7275.556
+                    helicopter.density = 5625
+                    ship.density = 1592.88889
+                    main()
+
+            outrotitle = Text(140, INTRO_TEXT, (container.centerx, WIN_H / 3))
+            outrotitle.image = outrotitle.font.render("GAME", 1, introtitle.color)
+            outrotitle.rect = outrotitle.image.get_rect()
+            outrotitle.rect = outrotitle.rect.move(WIN_W / 4 - 40 , WIN_H / 4)
+
+            outrotitle1 = Text(140, INTRO_TEXT, (container.centerx, WIN_H / 3))
+            outrotitle1.image = outrotitle1.font.render("OVER", 1, introtitle.color)
+            outrotitle1.rect = outrotitle1.image.get_rect()
+            outrotitle1.rect = outrotitle1.rect.move(WIN_W / 4 - 40, WIN_H / 2.25)
+
+            outrosub = Text(50, INTRO_TEXT, (WIN_W / 2 - 160, WIN_H / 3))
+            outrosub.image = outrosub.font.render("click to play", 1, introsub.color)
+            outrosub.rect = outrosub.image.get_rect()
+            outrosub.rect = outrosub.rect.move(WIN_W / 4.75 - 43, WIN_H / 1.5)
+
+            screen.blit(intro_back, intro_rect)
+            screen.blit(outrotitle.image, outrotitle.rect)
+            screen.blit(outrotitle1.image, outrotitle1.rect)
+
+            if pygame.time.get_ticks() % 1000 < 500:
+                screen.blit(outrosub.image, outrosub.rect)
+
+            clock.tick(fps)
+
+            pygame.display.flip()
+
+if __name__ == "__main__":
+    main()
